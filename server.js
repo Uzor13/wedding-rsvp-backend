@@ -46,7 +46,7 @@ app.post('/api/guests', async (req, res) => {
     try {
         const {name, phoneNumber} = req.body;
         const uniqueId = generateUniqueId();
-        const uniqueLink = process.env.SITE_LINK + `/${uniqueId}`;
+        const uniqueLink = process.env.SITE_LINK + `rsvp/${uniqueId}`;
         const qrcode = qrCode.toDataURL(uniqueLink);
         const code = generateCode();
 
