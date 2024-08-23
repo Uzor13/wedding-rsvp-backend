@@ -66,10 +66,8 @@ app.post('/api/guests', async (req, res) => {
 
 // API to handle rsvp
 app.post('/api/rsvp/:uniqueId', async (req, res) => {
-    console.log(req)
     try {
         const guest = await Guest.findOne({uniqueId: req.params.uniqueId}, null, null);
-        console.log(guest);
         if (guest) {
             guest.rsvpStatus = true;
             await guest.save();
@@ -86,7 +84,6 @@ app.post('/api/rsvp/:uniqueId', async (req, res) => {
 //API to return guest information
 app.get('/api/guest/:uniqueId', async (req, res) => {
     try {
-        console.log(req.params)
         const guest = await Guest.findOne({ uniqueId: req.params.uniqueId }, null, null);
         if (guest) {
             res.json(guest);
@@ -101,7 +98,6 @@ app.get('/api/guest/:uniqueId', async (req, res) => {
 // API route to get all guests
 app.get('/api/guests', async (req, res) => {
     try {
-        console.log(req.params);
         const guests = await Guest.find({}, null, null).select('-qrCode'); // Exclude qrCode for performance
         res.json(guests);
     } catch (error) {
