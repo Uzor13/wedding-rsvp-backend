@@ -112,11 +112,8 @@ app.get('/api/guests', async (req, res) => {
 app.post('/api/verify', async (req, res) => {
     try {
         const { uniqueId, code } = req.body;
-        console.log('code', code);
-        console.log('uniqueId', uniqueId);
         const guest = await Guest.findOne({
             $or: [{ uniqueId }, { code }],
-            isUsed: false
         }, null, null);
 
         if (!guest) {
