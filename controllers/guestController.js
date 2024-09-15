@@ -159,6 +159,9 @@ const confirmRsvp = async (req, res) => {
             return res.status(404).json({message: 'Guest not found'});
         }
 
+        if (guest.isUsed) {
+            return res.status(400).json({success: false, message: 'This QR code has already been scanned'});
+        }
 
         guest.isUsed = true;
         guest.rsvpStatus = true;
