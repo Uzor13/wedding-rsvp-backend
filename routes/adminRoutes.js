@@ -10,6 +10,6 @@ router.get('/guests', verifyAdmin, guestController.getAllGuests);
 router.post('/verify-guest', verifyAdmin, guestController.verifyGuest);
 router.post('/import', verifyAdmin, guestController.importGuestsFromCsv);
 router.delete('/delete/:phoneNumber', verifyAdmin, guestController.deleteGuest)
-router.post('/confirm-rsvp', verifyAdmin, guestController.confirmRsvp)
+router.post('/confirm-rsvp/:uniqueId', verifyAdmin, guestController.confirmRsvp)
 
 module.exports = router;
