@@ -159,32 +159,16 @@ const confirmRsvp = async (req, res) => {
             return res.status(404).json({message: 'Guest not found'});
         }
 
-        if (token) {
-            jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
-                if (err) {
-                    return res.status(401).json({message: 'Invalid token'});
-                }
 
-                guest.isUsed = true;
-                guest.rsvpStatus = true;
+        guest.isUsed = true;
+        guest.rsvpStatus = true;
 
-                guest.save().then(() => {
-                    res.json({success: true, message: 'RSVP and confirmation successful', guestName: guest.name});
-                });
-            });
-        } else {
-            if (guest.rsvpStatus) {
-                return res.status(400).json({message: 'RSVP already confirmed'});
-            }
+        guest.save().then(() => {
+            res.json({success: true, message: 'RSVP and verification successful', guestName: guest.name});
+        });
 
-            guest.isUsed = true;
-            guest.rsvpStatus = true;
-
-            guest.save().then(() => {
-                res.json({success: true, message: 'RSVP confirmed', guestName: guest.name});
-            });
-        }
-    } catch (error) {
+    } catch
+        (error) {
         res.status(500).json({message: error.message});
     }
 }
