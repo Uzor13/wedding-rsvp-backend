@@ -215,7 +215,8 @@ const sendSms = async (req, res) => {
                 }
             });
     } catch (e) {
-        return res.status(500).json({message: e.message});
+        console.log(e)
+        return res.status(400).json({message: e.message});
     }
 }
 
