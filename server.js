@@ -9,7 +9,7 @@ const guestRoutes = require('./routes/guestRoutes');
 const app = express();
 
 const corsOptions = {
-    origin: 'https://api.ebulksms.com/sendsms.json',
+    origin: '*',
     methods: ['GET', 'POST'],
     credentials: true
 };
