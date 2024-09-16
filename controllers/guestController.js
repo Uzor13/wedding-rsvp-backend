@@ -3,6 +3,7 @@ const qrCode = require('qrcode');
 const {SITE_LINK} = require('../config');
 const {generateUniqueId, generateCode} = require('../utils/idUtils');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 // Add new guest
 const addGuest = async (req, res) => {
@@ -176,6 +177,48 @@ const confirmRsvp = async (req, res) => {
     }
 }
 
+function formatPhoneNumber(phoneNumber) {
+    let cleanedNumber = phoneNumber.replace(/\s+/g, '').replace(/^\+?234/, '');
+    return '234' + cleanedNumber;
+}
+
+const sendSms = async (req, res) => {
+    try {
+        let {name, phoneNumber, link} = req.body;
+        phoneNumber = formatPhoneNumber(phoneNumber)
+        const generated_id = 'int_' + Date.now().toString().substring(0, 30);
+        const data = {
+            SMS: {
+                auth: {
+                    username: `${process.env.REACT_APP_SMS_USERNAME}`,
+                    apikey: `${process.env.REACT_APP_SMS_API_KEY}`,
+                },
+                message: {
+                    sender: `${process.env.REACT_APP_SMS_SENDER_NAME}`,
+                    messagetext: `Dear ${name}, you are cordially invited to our wedding ceremony on the 9th of November, please click the link below to confirm rsvp: ${link}`,
+                    flash: "0"
+                },
+                recipients: {
+                    gsm: [
+                        {
+                            msidn: `${phoneNumber}`,
+                            msgid: `${generated_id}`
+                        }
+                    ]
+                }
+            }
+        };
+        await axios.post(`https://api.ebulksms.com/sendsms.json`, {data},
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+    } catch (e) {
+        return res.status(500).json({message: e.message});
+    }
+}
+
 module.exports = {
     addGuest,
     handleRsvp,
@@ -184,5 +227,6 @@ module.exports = {
     verifyGuest,
     importGuestsFromCsv,
     deleteGuest,
-    confirmRsvp
+    confirmRsvp,
+    sendSms
 };
