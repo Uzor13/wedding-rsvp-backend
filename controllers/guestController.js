@@ -209,7 +209,7 @@ const sendSms = async (req, res) => {
             }
         };
         console.log(data)
-        await axios.post(`https://api.ebulksms.com/sendsms.json`, {data},
+        await axios.post(`https://api.ebulksms.com/sendsms.json`, data,
             {
                 headers: {
                     'Content-Type': 'application/json'
