@@ -8,7 +8,14 @@ const guestRoutes = require('./routes/guestRoutes');
 
 const app = express();
 
+const corsOptions = {
+    origin: 'https://api.ebulksms.com/sendsms.json',
+    methods: ['GET', 'POST'],
+    credentials: true
+};
+
 app.use(cors());
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 mongoose.connect(MONGO_URI)
