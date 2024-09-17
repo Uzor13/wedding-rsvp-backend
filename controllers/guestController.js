@@ -195,7 +195,7 @@ const sendSms = async (req, res) => {
                 },
                 message: {
                     sender: `${process.env.REACT_APP_SMS_SENDER_NAME}`,
-                    messagetext: `Dear ${name}, you are cordially invited to our wedding ceremony on the 9th of November, please click the link below to confirm rsvp: ${link}`,
+                    messagetext: `Dear ${name}, you are cordially invited to the wedding ceremony of Christopher and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`,
                     flash: "0"
                 },
                 recipients: {
@@ -208,13 +208,13 @@ const sendSms = async (req, res) => {
                 }
             }
         };
-        console.log(data)
         await axios.post(`https://api.ebulksms.com/sendsms.json`, data,
             {
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
+        return res.status(200).json({success: true, message: 'SMS sent successfully'});
     } catch (e) {
         console.log(e)
         return res.status(400).json({message: e.message});
