@@ -195,7 +195,7 @@ const sendSms = async (req, res) => {
                 },
                 message: {
                     sender: `${process.env.REACT_APP_SMS_SENDER_NAME}`,
-                    messagetext: `Dear ${name}, you are cordially invited to the wedding ceremony of Christopher and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`,
+                    messagetext: `Dear ${name}, you are cordially invited to the wedding ceremony of Chris and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`,
                     flash: "0"
                 },
                 recipients: {
