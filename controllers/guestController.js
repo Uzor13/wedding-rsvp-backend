@@ -4,6 +4,7 @@ const {SITE_LINK} = require('../config');
 const {generateUniqueId, generateCode} = require('../utils/idUtils');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const africastalking = require("../integration/africastalking")
 
 // Add new guest
 const addGuest = async (req, res) => {
@@ -177,43 +178,13 @@ const confirmRsvp = async (req, res) => {
     }
 }
 
-function formatPhoneNumber(phoneNumber) {
-    let cleanedNumber = phoneNumber.replace(/\s+/g, '').replace(/^\+?234/, '');
-    return '234' + cleanedNumber;
-}
-
 const sendSms = async (req, res) => {
     try {
         let {name, phoneNumber, link} = req.body;
-        phoneNumber = formatPhoneNumber(phoneNumber)
-        const generated_id = 'int_' + Date.now().toString().substring(0, 30);
-        const data = {
-            SMS: {
-                auth: {
-                    username: `${process.env.REACT_APP_SMS_USERNAME}`,
-                    apikey: `${process.env.REACT_APP_SMS_API_KEY}`,
-                },
-                message: {
-                    sender: `${process.env.REACT_APP_SMS_SENDER_NAME}`,
-                    messagetext: `Dear ${name}, you are cordially invited to the wedding ceremony of Christopher and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`,
-                    flash: "0"
-                },
-                recipients: {
-                    gsm: [
-                        {
-                            msidn: `${phoneNumber}`,
-                            msgid: `${generated_id}`
-                        }
-                    ]
-                }
-            }
-        };
-        await axios.post(`https://api.ebulksms.com/sendsms.json`, data,
-            {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+        let message = `Dear ${name}, you are cordially invited to the wedding ceremony of Christopher and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`
+        africastalking.sendBulkSMS([`${phoneNumber}`], message)
+            .then(() => console.log("Sms sent successfully"))
+            .catch((err) => console.log(err));
         return res.status(200).json({success: true, message: 'SMS sent successfully'});
     } catch (e) {
         console.log(e)
