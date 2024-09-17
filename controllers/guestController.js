@@ -4,7 +4,7 @@ const {SITE_LINK} = require('../config');
 const {generateUniqueId, generateCode} = require('../utils/idUtils');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
-const africastalking = require("../integration/africastalking")
+const twilio = require("../integration/twilio")
 
 // Add new guest
 const addGuest = async (req, res) => {
@@ -181,8 +181,8 @@ const confirmRsvp = async (req, res) => {
 const sendSms = async (req, res) => {
     try {
         let {name, phoneNumber, link} = req.body;
-        let message = `Dear ${name}, you are cordially invited to the wedding ceremony of Christopher and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`
-        africastalking.sendBulkSMS([`${phoneNumber}`], message)
+        let message = `Dear ${name}, you are cordially invited to the wedding ceremony of Chris and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`
+        twilio.sendSMS(`${phoneNumber}`, message)
             .then(() => console.log("Sms sent successfully"))
             .catch((err) => console.log(err));
         return res.status(200).json({success: true, message: 'SMS sent successfully'});
