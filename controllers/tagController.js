@@ -92,4 +92,19 @@ router.delete('/:tagId/users/:userId', async (req, res) => {
   }
 });
 
+// Endpoint to get the tag for a specific user
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const tag = await Tag.findOne({ users: req.params.userId });
+    if (tag) {
+      res.json(tag);
+    } else {
+      res.status(404).json({ error: 'No tag found for this user' });
+    }
+  } catch (error) {
+    console.error('Error fetching tag for user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
