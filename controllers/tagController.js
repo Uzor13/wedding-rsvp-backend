@@ -107,4 +107,32 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
+// In Node.js/Express
+router.put('/reassign', async (req, res) => {
+  const { userId, newTagId } = req.body;
+
+  try {
+    // Find the current tag containing the user
+    const currentTag = await Tag.findOne({ "users._id": userId });
+
+    // If the user is found in another tag, remove them from it
+    if (currentTag) {
+      currentTag.users = currentTag.users.filter(user => user._id.toString() !== userId);
+      await currentTag.save();
+    }
+
+    // Add the user to the new tag
+    const newTag = await Tag.findById(newTagId);
+    if (newTag) {
+      newTag.users.push({ _id: userId });
+      await newTag.save();
+    }
+
+    res.status(200).json({ message: 'User reassigned successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error reassigning user', error });
+  }
+});
+
+
 module.exports = router;
