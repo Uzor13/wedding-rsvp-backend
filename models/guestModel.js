@@ -8,6 +8,10 @@ const guestSchema = new mongoose.Schema({
     code: { type: String, unique: true },
     qrCode: String,
     isUsed: { type: Boolean, default: false },
+    tags: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Tag'
+    }]
 });
 
 const Guest = mongoose.model('Guest', guestSchema);
