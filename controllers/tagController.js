@@ -107,32 +107,75 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
-// In Node.js/Express
+
 router.put('/reassign', async (req, res) => {
   const { userId, newTagId } = req.body;
 
   try {
-    // Find the current tag containing the user
-    const currentTag = await Tag.findOne({ "users._id": userId });
-
-    // If the user is found in another tag, remove them from it
-    if (currentTag) {
-      currentTag.users = currentTag.users.filter(user => user._id.toString() !== userId);
-      await currentTag.save();
+    // Input validation
+    if (!userId || !newTagId) {
+      return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Add the user to the new tag
-    const newTag = await Tag.findById(newTagId);
-    if (newTag) {
-      newTag.users.push({ _id: userId });
-      await newTag.save();
+    // Find both current and new tags
+    const [currentTag, newTag] = await Promise.all([
+      Tag.findOne({ "users._id": userId }),
+      Tag.findById(newTagId)
+    ]);
+
+    if (!newTag) {
+      return res.status(404).json({ message: 'New tag not found' });
     }
 
-    res.status(200).json({ message: 'User reassigned successfully' });
+    // Start a session for the transaction
+    const session = await Tag.startSession();
+
+    try {
+      await session.withTransaction(async () => {
+        // Remove user from current tag if exists
+        if (currentTag) {
+          // Using filtered array instead of $pull to ensure proper removal
+          const updatedUsers = currentTag.users.filter(
+              user => user._id.toString() !== userId.toString()
+          );
+
+          await Tag.findByIdAndUpdate(
+              currentTag._id,
+              { $set: { users: updatedUsers } },
+              { session }
+          );
+        }
+
+        // Add user to new tag if not already present
+        const userExists = newTag.users.some(
+            user => user._id.toString() === userId.toString()
+        );
+
+        if (!userExists) {
+          await Tag.findByIdAndUpdate(
+              newTagId,
+              { $addToSet: { users: { _id: userId } } },
+              { session }
+          );
+        }
+      });
+
+      await session.commitTransaction();
+      res.status(200).json({
+        message: 'User reassigned successfully',
+        from: currentTag ? currentTag._id : null,
+        to: newTagId
+      });
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   } catch (error) {
-    res.status(500).json({ message: 'Error reassigning user', error });
+    console.error('Error in tag reassignment:', error);
+    res.status(500).json({ message: 'Error reassigning user', error: error.message });
   }
 });
-
 
 module.exports = router;
