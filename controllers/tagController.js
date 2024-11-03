@@ -168,7 +168,7 @@ router.put('/reassign', async (req, res) => {
       });
     } catch (error) {
       await session.abortTransaction();
-      throw error;
+      console.log(error);
     } finally {
       await session.endSession();
     }

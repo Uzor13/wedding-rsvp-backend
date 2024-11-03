@@ -7,8 +7,6 @@ const africastalking = AfricasTalking({ username, apiKey });
 
 const sms = africastalking.SMS;
 
-const whatsapp = africastalking.WHATSAPP;
-
 async function sendBulkSMS(recipients, message) {
     try {
         console.log(recipients)

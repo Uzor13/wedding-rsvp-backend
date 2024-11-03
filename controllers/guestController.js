@@ -3,13 +3,14 @@ const qrCode = require('qrcode');
 const {SITE_LINK} = require('../config');
 const {generateUniqueId, generateCode} = require('../utils/idUtils');
 const termii = require("../integration/termii")
+const csv = require("csv");
 
 // Add new guest
 const addGuest = async (req, res) => {
     try {
         const {name, phoneNumber} = req.body;
 
-        const existingGuest = await Guest.findOne({phoneNumber});
+        const existingGuest = await Guest.findOne({phoneNumber}, null, null);
         if (existingGuest) {
             return res.status(400).json({message: 'Guest with this phone number already exists'});
         }
@@ -17,7 +18,12 @@ const addGuest = async (req, res) => {
         const uniqueId = generateUniqueId();
         const uniqueLink = `${SITE_LINK}/confirm-rsvp/${uniqueId}`;
         const qrcode = await qrCode.toDataURL(uniqueLink);
-        const code = generateCode();
+        let code = generateCode();
+
+        const existingCodeForUser = await Guest.findOne({code}, null, null);
+        if (existingCodeForUser) {
+            code = generateCode();
+        }
 
         const guest = new Guest({
             name,
@@ -37,7 +43,7 @@ const addGuest = async (req, res) => {
 // Handle RSVP
 const handleRsvp = async (req, res) => {
     try {
-        const guest = await Guest.findOne({uniqueId: req.params.uniqueId});
+        const guest = await Guest.findOne({uniqueId: req.params.uniqueId}, null, null);
         if (guest) {
             guest.rsvpStatus = true;
             await guest.save();
@@ -53,7 +59,7 @@ const handleRsvp = async (req, res) => {
 // Get guest information
 const getGuestInfo = async (req, res) => {
     try {
-        const guest = await Guest.findOne({uniqueId: req.params.uniqueId});
+        const guest = await Guest.findOne({uniqueId: req.params.uniqueId}, null, null);
         if (guest) {
             res.json(guest);
         } else {
@@ -67,7 +73,7 @@ const getGuestInfo = async (req, res) => {
 // Get all guests
 const getAllGuests = async (req, res) => {
     try {
-        const guests = await Guest.find({}).select('-qrCode');
+        const guests = await Guest.find({}, null, null).select('-qrCode');
         res.json(guests);
     } catch (error) {
         res.status(500).json({error: error.message});
@@ -77,7 +83,7 @@ const getAllGuests = async (req, res) => {
 const deleteGuest = async (req, res) => {
     try {
         const {phoneNumber} = req.params;
-        const guest = await Guest.findOneAndDelete({phoneNumber});
+        const guest = await Guest.findOneAndDelete({phoneNumber}, null);
         if (!guest) {
             return res.status(404).json({message: 'Guest not found'});
         }
@@ -93,7 +99,7 @@ const deleteGuest = async (req, res) => {
 const verifyGuest = async (req, res) => {
     try {
         const {uniqueId, code} = req.body;
-        const guest = await Guest.findOne({$or: [{uniqueId}, {code}]});
+        const guest = await Guest.findOne({$or: [{uniqueId}, {code}]}, null, null);
 
         if (!guest) {
             return res.status(401).json({success: false, message: 'Guest not found'});
@@ -152,9 +158,8 @@ const importGuestsFromCsv = async (req, res) => {
 const confirmRsvp = async (req, res) => {
     try {
         const {uniqueId} = req.params;
-        const token = req.headers['Authorization'];
+        const guest = await Guest.findOne({uniqueId}, null, null);
 
-        const guest = await Guest.findOne({uniqueId});
         if (!guest) {
             return res.status(404).json({message: 'Guest not found'});
         }
