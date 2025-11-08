@@ -84,11 +84,18 @@ router.post('/:id/users', async (req, res) => {
             return res.status(400).json({message: 'Some users not found for this couple'});
         }
 
-        const updated = await Tag.findByIdAndUpdate(
+        await Tag.findByIdAndUpdate(
             tag._id,
             {$addToSet: {users: {$each: userIds}}},
             {new: true}
-        ).populate('users', 'name phoneNumber');
+        );
+
+        await Guest.updateMany(
+            {_id: {$in: userIds}},
+            {$addToSet: {tags: tag._id}}
+        );
+
+        const updated = await Tag.findById(tag._id).populate('users', 'name phoneNumber');
 
         res.json(updated);
     } catch (error) {
@@ -110,6 +117,7 @@ router.delete('/:tagId/users/:userId', async (req, res) => {
         }
 
         await Tag.findByIdAndUpdate(tag._id, {$pull: {users: req.params.userId}});
+        await Guest.findByIdAndUpdate(req.params.userId, {$pull: {tags: tag._id}});
         const updated = await Tag.findById(tag._id).populate('users', 'name phoneNumber');
         res.json(updated);
     } catch (error) {
@@ -169,6 +177,14 @@ router.put('/reassign', async (req, res) => {
                 await Tag.findByIdAndUpdate(
                     newTag._id,
                     {$addToSet: {users: userId}},
+                    {session}
+                );
+
+                await Guest.findByIdAndUpdate(
+                    userId,
+                    {
+                        $set: {tags: [newTag._id]}
+                    },
                     {session}
                 );
             });

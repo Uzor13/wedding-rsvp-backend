@@ -1,4 +1,5 @@
 const Guest = require('../models/guestModel');
+const Tag = require('../models/tagModel');
 const qrCode = require('qrcode');
 const {SITE_LINK} = require('../config');
 const {generateUniqueId, generateCode} = require('../utils/idUtils');
@@ -9,16 +10,25 @@ const Settings = require('../models/settingsModel');
 // Add new guest
 const addGuest = async (req, res) => {
     try {
-        const {name, phoneNumber, coupleId: bodyCoupleId} = req.body;
+        const {name, phoneNumber, coupleId: bodyCoupleId, tagId} = req.body;
         const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : bodyCoupleId;
 
         if (!coupleId) {
             return res.status(400).json({message: 'coupleId is required'});
         }
 
+        if (!tagId) {
+            return res.status(400).json({message: 'tagId is required'});
+        }
+
         const existingGuest = await Guest.findOne({phoneNumber, couple: coupleId}, null, null);
         if (existingGuest) {
             return res.status(400).json({message: 'Guest with this phone number already exists'});
+        }
+
+        const tag = await Tag.findOne({_id: tagId, couple: coupleId});
+        if (!tag) {
+            return res.status(404).json({message: 'Tag not found for this couple'});
         }
 
         const uniqueId = generateUniqueId();
@@ -37,10 +47,13 @@ const addGuest = async (req, res) => {
             uniqueId,
             qrCode: qrcode,
             code,
-            couple: coupleId
+            couple: coupleId,
+            tags: [tagId]
         });
 
         await guest.save();
+        await Tag.findByIdAndUpdate(tag._id, {$addToSet: {users: guest._id}});
+        await guest.populate('tags');
         res.status(201).json({guest, uniqueLink, code});
     } catch (e) {
         res.status(400).json({error: e.message});
@@ -106,12 +119,18 @@ const deleteGuest = async (req, res) => {
         if (coupleId) {
             filter.couple = coupleId;
         }
-        const guest = await Guest.findOneAndDelete(filter, null);
+        const guest = await Guest.findOne(filter, null, null);
         if (!guest) {
             return res.status(404).json({message: 'Guest not found'});
         }
 
-        return res.json({code: res.status(200), message: "Guest deleted successfully"});
+        await Tag.updateMany(
+            {users: guest._id},
+            {$pull: {users: guest._id}}
+        );
+        await Guest.deleteOne({_id: guest._id});
+
+        return res.status(200).json({message: "Guest deleted successfully"});
 
     } catch (e) {
         res.status(500).json({message: 'Error deleting guest', error: e.message});
@@ -130,7 +149,7 @@ const verifyGuest = async (req, res) => {
             filter.couple = coupleId;
         }
 
-        const guest = await Guest.findOne(filter, null, null);
+        const guest = await Guest.findOne(filter, null, null).populate('tags');
 
         if (!guest) {
             return res.status(401).json({success: false, message: 'Guest not found'});
