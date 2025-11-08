@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema({
+    couple: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Couple',
+        default: null
+    },
     eventTitle: {
         type: String,
         default: 'Wedding Invitation'
@@ -68,6 +73,8 @@ const settingsSchema = new mongoose.Schema({
         }
     }
 }, {timestamps: true, collection: 'settings'});
+
+settingsSchema.index({couple: 1}, {unique: true, sparse: true});
 
 module.exports = mongoose.models.Setting || mongoose.model('Setting', settingsSchema);
 

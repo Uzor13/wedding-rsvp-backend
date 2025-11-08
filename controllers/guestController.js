@@ -2,15 +2,21 @@ const Guest = require('../models/guestModel');
 const qrCode = require('qrcode');
 const {SITE_LINK} = require('../config');
 const {generateUniqueId, generateCode} = require('../utils/idUtils');
-const termii = require("../integration/termii")
+const termii = require("../integration/termii");
 const csv = require("csv");
+const Settings = require('../models/settingsModel');
 
 // Add new guest
 const addGuest = async (req, res) => {
     try {
-        const {name, phoneNumber} = req.body;
+        const {name, phoneNumber, coupleId: bodyCoupleId} = req.body;
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : bodyCoupleId;
 
-        const existingGuest = await Guest.findOne({phoneNumber}, null, null);
+        if (!coupleId) {
+            return res.status(400).json({message: 'coupleId is required'});
+        }
+
+        const existingGuest = await Guest.findOne({phoneNumber, couple: coupleId}, null, null);
         if (existingGuest) {
             return res.status(400).json({message: 'Guest with this phone number already exists'});
         }
@@ -31,6 +37,7 @@ const addGuest = async (req, res) => {
             uniqueId,
             qrCode: qrcode,
             code,
+            couple: coupleId
         });
 
         await guest.save();
@@ -59,9 +66,15 @@ const handleRsvp = async (req, res) => {
 // Get guest information
 const getGuestInfo = async (req, res) => {
     try {
-        const guest = await Guest.findOne({uniqueId: req.params.uniqueId}, null, null);
+        const guest = await Guest.findOne({uniqueId: req.params.uniqueId}, null, null)
+            .populate('couple')
+            .populate('tags');
         if (guest) {
-            res.json(guest);
+            const settings = await Settings.findOne({couple: guest.couple?._id}, null, null);
+            res.json({
+                ...guest.toObject(),
+                settings
+            });
         } else {
             res.status(404).json({error: 'Guest not found'});
         }
@@ -73,7 +86,9 @@ const getGuestInfo = async (req, res) => {
 // Get all guests
 const getAllGuests = async (req, res) => {
     try {
-        const guests = await Guest.find({}, null, null).select('-qrCode');
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : req.query.coupleId;
+        const filter = coupleId ? {couple: coupleId} : {};
+        const guests = await Guest.find(filter, null, null).select('-qrCode');
         res.json(guests);
     } catch (error) {
         res.status(500).json({error: error.message});
@@ -83,7 +98,15 @@ const getAllGuests = async (req, res) => {
 const deleteGuest = async (req, res) => {
     try {
         const {phoneNumber} = req.params;
-        const guest = await Guest.findOneAndDelete({phoneNumber}, null);
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : req.query.coupleId;
+        if (req.auth?.role === 'admin' && !coupleId) {
+            return res.status(400).json({message: 'coupleId is required'});
+        }
+        const filter = {phoneNumber};
+        if (coupleId) {
+            filter.couple = coupleId;
+        }
+        const guest = await Guest.findOneAndDelete(filter, null);
         if (!guest) {
             return res.status(404).json({message: 'Guest not found'});
         }
@@ -99,7 +122,15 @@ const deleteGuest = async (req, res) => {
 const verifyGuest = async (req, res) => {
     try {
         const {uniqueId, code} = req.body;
-        const guest = await Guest.findOne({$or: [{uniqueId}, {code}]}, null, null);
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : req.body.coupleId;
+        const filter = {
+            $or: [{uniqueId}, {code}]
+        };
+        if (coupleId) {
+            filter.couple = coupleId;
+        }
+
+        const guest = await Guest.findOne(filter, null, null);
 
         if (!guest) {
             return res.status(401).json({success: false, message: 'Guest not found'});
@@ -122,7 +153,12 @@ const verifyGuest = async (req, res) => {
 // Import guests from CSV
 const importGuestsFromCsv = async (req, res) => {
     try {
-        const {csvData} = req.body;
+        const {csvData, coupleId: bodyCoupleId} = req.body;
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : bodyCoupleId;
+
+        if (!coupleId) {
+            return res.status(400).json({message: 'coupleId is required'});
+        }
 
         csv.parse(csvData, {columns: true, trim: true}, async (err, records) => {
             if (err) {
@@ -141,7 +177,8 @@ const importGuestsFromCsv = async (req, res) => {
                     phoneNumber: record.phoneNumber,
                     uniqueId,
                     code,
-                    qrCode
+                    qrCode,
+                    couple: coupleId
                 });
 
                 await guest.save();
@@ -158,7 +195,12 @@ const importGuestsFromCsv = async (req, res) => {
 const confirmRsvp = async (req, res) => {
     try {
         const {uniqueId} = req.params;
-        const guest = await Guest.findOne({uniqueId}, null, null);
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : req.body.coupleId;
+        const filter = {uniqueId};
+        if (coupleId) {
+            filter.couple = coupleId;
+        }
+        const guest = await Guest.findOne(filter, null, null);
 
         if (!guest) {
             return res.status(404).json({message: 'Guest not found'});
@@ -183,8 +225,21 @@ const confirmRsvp = async (req, res) => {
 
 const sendSms = async (req, res) => {
     try {
-        let {name, phoneNumber, link} = req.body;
-        let message = `Dear ${name}, you are cordially invited to the wedding ceremony of Chris and Amaka on the 9th of November in Abuja, please click the link below to confirm rsvp: ${link}`
+        let {name, phoneNumber, link, coupleId: bodyCoupleId} = req.body;
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : bodyCoupleId;
+        if (!coupleId) {
+            return res.status(400).json({message: 'coupleId is required'});
+        }
+        const settings = coupleId ? await Settings.findOne({couple: coupleId}) : null;
+        const coupleNames = settings?.coupleNames || 'Chris and Amaka';
+        const eventTitle = settings?.eventTitle || 'Wedding Celebration';
+        const eventDate = settings?.eventDate || 'the wedding day';
+        const eventTime = settings?.eventTime || 'the scheduled time';
+        const venue = settings?.venueName || 'our celebration venue';
+        const venueAddress = settings?.venueAddress || '';
+        const colorOfDay = settings?.colorOfDay ? ` Colour of the day: ${settings.colorOfDay}.` : '';
+        const addressPart = venueAddress ? ` (${venueAddress})` : '';
+        const message = `Dear ${name}, you are warmly invited to ${coupleNames}'s ${eventTitle} at ${venue}${addressPart} on ${eventDate} at ${eventTime}.${colorOfDay} Confirm your RSVP here: ${link}`;
         termii.sendSMS(`${phoneNumber}`, message)
             .then(() => console.log("Sms sent successfully"))
             .catch((err) => console.log(err));

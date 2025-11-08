@@ -1,181 +1,187 @@
 const express = require('express');
 const router = express.Router();
 const Tag = require('../models/tagModel');
-const User = require('../models/guestModel'); // Assuming you already have this
+const Guest = require('../models/guestModel');
+const {authenticate, authorize} = require('../middleware/authMiddleware');
 
-// Get all tags
+router.use(authenticate);
+router.use(authorize('admin', 'couple'));
+
+const resolveCoupleId = (req, source = 'query') => {
+    if (req.auth?.role === 'couple') {
+        return req.auth.coupleId;
+    }
+    if (source === 'body') {
+        return req.body.coupleId || req.query.coupleId;
+    }
+    if (source === 'params') {
+        return req.params.coupleId || req.query.coupleId;
+    }
+    return req.query.coupleId;
+};
+
 router.get('/', async (req, res) => {
-  try {
-    const tags = await Tag.find().populate('users', 'name email');
-    res.json(tags);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+    try {
+        const coupleId = resolveCoupleId(req);
+        const filter = coupleId ? {couple: coupleId} : {};
+        const tags = await Tag.find(filter).populate('users', 'name phoneNumber');
+        res.json(tags);
+    } catch (error) {
+        res.status(500).json({message: error.message});
+    }
 });
 
-// Create a new tag
 router.post('/', async (req, res) => {
-  try {
-    const { name } = req.body;
+    try {
+        const {name, coupleId: bodyCoupleId} = req.body;
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : bodyCoupleId;
+        if (!name || !coupleId) {
+            return res.status(400).json({message: 'Name and coupleId are required'});
+        }
 
-    // Check if tag already exists
-    const existingTag = await Tag.findOne({ name });
-    if (existingTag) {
-      return res.status(400).json({ message: 'Tag already exists' });
+        const existingTag = await Tag.findOne({name, couple: coupleId});
+        if (existingTag) {
+            return res.status(400).json({message: 'Tag already exists'});
+        }
+
+        const tag = await Tag.create({name, couple: coupleId});
+        res.status(201).json(tag);
+    } catch (error) {
+        res.status(400).json({message: error.message});
     }
-
-    const tag = new Tag({ name });
-    const savedTag = await tag.save();
-    res.status(201).json(savedTag);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-    console.log(error)
-  }
 });
 
-// Delete a tag
 router.delete('/:id', async (req, res) => {
-  try {
-    const tag = await Tag.findByIdAndDelete(req.params.id);
-    if (!tag) {
-      return res.status(404).json({ message: 'Tag not found' });
+    try {
+        const coupleId = resolveCoupleId(req);
+        const filter = {_id: req.params.id};
+        if (coupleId) {
+            filter.couple = coupleId;
+        }
+
+        const tag = await Tag.findOneAndDelete(filter);
+        if (!tag) {
+            return res.status(404).json({message: 'Tag not found'});
+        }
+        res.json({message: 'Tag deleted'});
+    } catch (error) {
+        res.status(500).json({message: error.message});
     }
-    res.json({ message: 'Tag deleted' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 });
 
-// Assign users to a tag
 router.post('/:id/users', async (req, res) => {
-  try {
-    const { userIds } = req.body;
-    const tag = await Tag.findById(req.params.id);
+    try {
+        const {userIds = []} = req.body;
+        const coupleId = resolveCoupleId(req, 'body');
 
-    if (!tag) {
-      return res.status(404).json({ message: 'Tag not found' });
+        const tag = await Tag.findOne({_id: req.params.id, ...(coupleId ? {couple: coupleId} : {})});
+        if (!tag) {
+            return res.status(404).json({message: 'Tag not found'});
+        }
+
+        const guests = await Guest.find({_id: {$in: userIds}, couple: tag.couple});
+        if (guests.length !== userIds.length) {
+            return res.status(400).json({message: 'Some users not found for this couple'});
+        }
+
+        const updated = await Tag.findByIdAndUpdate(
+            tag._id,
+            {$addToSet: {users: {$each: userIds}}},
+            {new: true}
+        ).populate('users', 'name phoneNumber');
+
+        res.json(updated);
+    } catch (error) {
+        res.status(400).json({message: error.message});
     }
-
-    // Verify all users exist
-    const users = await User.find({ _id: { $in: userIds } });
-    if (users.length !== userIds.length) {
-      return res.status(400).json({ message: 'Some users not found' });
-    }
-
-    // Add users to tag
-    tag.users = [...new Set([...tag.users, ...userIds])];
-    await tag.save();
-
-    const updatedTag = await Tag.findById(req.params.id).populate('users', 'name email');
-    res.json(updatedTag);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
 });
 
-// Remove user from tag
 router.delete('/:tagId/users/:userId', async (req, res) => {
-  try {
-    const tag = await Tag.findById(req.params.tagId);
-    if (!tag) {
-      return res.status(404).json({ message: 'Tag not found' });
+    try {
+        const coupleId = resolveCoupleId(req, 'params');
+        const filter = {_id: req.params.tagId};
+        if (coupleId) {
+            filter.couple = coupleId;
+        }
+
+        const tag = await Tag.findOne(filter);
+        if (!tag) {
+            return res.status(404).json({message: 'Tag not found'});
+        }
+
+        await Tag.findByIdAndUpdate(tag._id, {$pull: {users: req.params.userId}});
+        const updated = await Tag.findById(tag._id).populate('users', 'name phoneNumber');
+        res.json(updated);
+    } catch (error) {
+        res.status(400).json({message: error.message});
     }
-
-    tag.users = tag.users.filter(userId =>
-        userId.toString() !== req.params.userId
-    );
-    await tag.save();
-
-    res.json(tag);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
 });
 
-// Endpoint to get the tag for a specific user
 router.get('/user/:userId', async (req, res) => {
-  try {
-    const tag = await Tag.findOne({ users: req.params.userId });
-    if (tag) {
-      res.json(tag);
-    } else {
-      res.status(404).json({ error: 'No tag found for this user' });
-    }
-  } catch (error) {
-    console.error('Error fetching tag for user:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
+    try {
+        const coupleId = resolveCoupleId(req, 'params');
+        const filter = {users: req.params.userId};
+        if (coupleId) {
+            filter.couple = coupleId;
+        }
 
+        const tag = await Tag.findOne(filter);
+        if (!tag) {
+            return res.status(404).json({error: 'No tag found for this user'});
+        }
+        res.json(tag);
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+});
 
 router.put('/reassign', async (req, res) => {
-  const { userId, newTagId } = req.body;
-
-  try {
-    // Input validation
-    if (!userId || !newTagId) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    // Find both current and new tags
-    const [currentTag, newTag] = await Promise.all([
-      Tag.findOne({ "users._id": userId }),
-      Tag.findById(newTagId)
-    ]);
-
-    if (!newTag) {
-      return res.status(404).json({ message: 'New tag not found' });
-    }
-
-    // Start a session for the transaction
-    const session = await Tag.startSession();
+    const {userId, newTagId, coupleId: bodyCoupleId} = req.body;
 
     try {
-      await session.withTransaction(async () => {
-        // Remove user from current tag if exists
-        if (currentTag) {
-          // Using filtered array instead of $pull to ensure proper removal
-          const updatedUsers = currentTag.users.filter(
-              user => user._id.toString() !== userId.toString()
-          );
-
-          await Tag.findByIdAndUpdate(
-              currentTag._id,
-              { $set: { users: updatedUsers } },
-              { session }
-          );
+        if (!userId || !newTagId) {
+            return res.status(400).json({message: 'Missing required fields'});
         }
 
-        // Add user to new tag if not already present
-        const userExists = newTag.users.some(
-            user => user._id.toString() === userId.toString()
-        );
-
-        if (!userExists) {
-          await Tag.findByIdAndUpdate(
-              newTagId,
-              { $addToSet: { users: { _id: userId } } },
-              { session }
-          );
+        const coupleId = req.auth?.role === 'couple' ? req.auth.coupleId : bodyCoupleId;
+        const newTag = await Tag.findOne({_id: newTagId, ...(coupleId ? {couple: coupleId} : {})});
+        if (!newTag) {
+            return res.status(404).json({message: 'New tag not found'});
         }
-      });
 
-      await session.commitTransaction();
-      res.status(200).json({
-        message: 'User reassigned successfully',
-        from: currentTag ? currentTag._id : null,
-        to: newTagId
-      });
+        const currentTag = await Tag.findOne({users: userId, couple: newTag.couple});
+
+        if (currentTag && currentTag._id.equals(newTag._id)) {
+            return res.json({message: 'User already assigned to this tag'});
+        }
+
+        const session = await Tag.startSession();
+        try {
+            await session.withTransaction(async () => {
+                if (currentTag) {
+                    await Tag.findByIdAndUpdate(
+                        currentTag._id,
+                        {$pull: {users: userId}},
+                        {session}
+                    );
+                }
+
+                await Tag.findByIdAndUpdate(
+                    newTag._id,
+                    {$addToSet: {users: userId}},
+                    {session}
+                );
+            });
+            await session.endSession();
+            res.json({message: 'User reassigned successfully'});
+        } catch (error) {
+            await session.abortTransaction();
+            await session.endSession();
+            res.status(500).json({message: error.message});
+        }
     } catch (error) {
-      await session.abortTransaction();
-      console.log(error);
-    } finally {
-      await session.endSession();
+        res.status(500).json({message: error.message});
     }
-  } catch (error) {
-    console.error('Error in tag reassignment:', error);
-    res.status(500).json({ message: 'Error reassigning user', error: error.message });
-  }
 });
 
 module.exports = router;

@@ -1,6 +1,6 @@
 # Wedding RSVP Backend
 
-Node/Express API that powers the RSVP management dashboard. It handles admin authentication, guest onboarding, tag assignments, SMS notifications, PDF/QR generation, and allows dynamic theming through a settings document stored in MongoDB.
+Node/Express API for a multi-tenant RSVP platform. It handles admin & couple authentication, guest onboarding, tag assignments, SMS notifications, PDF/QR generation, and thematic settings stored per couple in MongoDB.
 
 ## Requirements
 
@@ -22,16 +22,21 @@ TWILIO_MESSAGING_SERVICE_SID=optional-if-using-twilio
 REACT_APP_SMS_SENDER_NAME=...
 REACT_APP_SMS_API_KEY=...
 REACT_APP_SMS_USERNAME=...
+SITE_LINK=https://frontend-host             # used for RSVP links/QRs
 ```
 
-The app also seeds an admin user (`admin` / `admin1234`) and default event settings via the seed script below.
+The seed script creates:
+
+- Admin credentials (`admin` / `admin1234`)
+- A default settings document (per couple records are created on demand)
+- Collections for guests, tags, couples, and settings
 
 ## Getting Started
 
 ```bash
 npm install
-npm run seed          # creates admin user + default settings document
-npm run dev           # runs API with nodemon + frontend project via concurrently
+npm run seed          # seeds admin user + default settings
+npm run dev           # runs API with nodemon + frontend dev server via concurrently
 ```
 
 - `npm run start:backend` – backend only with nodemon
@@ -39,14 +44,18 @@ npm run dev           # runs API with nodemon + frontend project via concurrentl
 
 The API serves:
 
-- `POST /api/admin/login` – returns JWT
-- `GET/PUT /api/settings` – admin-only settings CRUD
-- `GET /api/settings/public` – public-facing settings used by the invitation page
-- Guest/tag CRUD and RSVP endpoints under `/api/...` and `/api/tags/...`
+- `POST /api/admin/login` – admin JWT (role: `admin`)
+- `POST /api/admin/couple/login` – couple JWT (role: `couple`)
+- `POST /api/admin/couples` – create a couple (admin only) and auto-generate credentials
+- `GET /api/admin/couples` – list couples (admin only)
+- `GET/PUT /api/settings` – scoped settings CRUD (admin can pass `coupleId`)
+- `GET /api/settings/public` – public settings for invitations (supports `?coupleId=`)
+- `POST /api/admin/add-guest`, `/api/admin/guests`, `/api/admin/send-sms`, etc. – guest + tag management, scoped by couple
 
 ## Deployment Notes
 
 - Provide the same environment variables on the hosting platform (Render, Railway, etc.).
 - Run `npm run seed` once after provisioning the database to ensure the admin user and default settings exist.
 - Rotate credentials regularly; JWT `SECRET_KEY` should be unique per environment.
+- Configure SMS providers (Termii/Twilio) with production API keys and sender IDs.
 

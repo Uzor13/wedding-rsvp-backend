@@ -1,17 +1,18 @@
 const Settings = require('../models/settingsModel');
 
-async function ensureSettings() {
-    let settings = await Settings.findOne();
+async function ensureSettings(coupleId = null) {
+    const filter = coupleId ? {couple: coupleId} : {couple: null};
+    let settings = await Settings.findOne(filter);
     if (!settings) {
-        settings = new Settings();
-        await settings.save();
+        settings = await Settings.create(filter);
     }
     return settings;
 }
 
 const getPublicSettings = async (req, res) => {
     try {
-        const settings = await ensureSettings();
+        const {coupleId} = req.query;
+        const settings = await ensureSettings(coupleId || null);
         res.json(settings);
     } catch (error) {
         res.status(500).json({message: error.message});
@@ -20,7 +21,10 @@ const getPublicSettings = async (req, res) => {
 
 const getSettings = async (req, res) => {
     try {
-        const settings = await ensureSettings();
+        const coupleId = req.auth?.role === 'couple'
+            ? req.auth.coupleId
+            : (req.query.coupleId || null);
+        const settings = await ensureSettings(coupleId);
         res.json(settings);
     } catch (error) {
         res.status(500).json({message: error.message});
@@ -48,8 +52,12 @@ const updateSettings = async (req, res) => {
             });
         }
 
+        const coupleId = req.auth?.role === 'couple'
+            ? req.auth.coupleId
+            : (req.body.coupleId || null);
+
         const settings = await Settings.findOneAndUpdate(
-            {},
+            coupleId ? {couple: coupleId} : {couple: null},
             {$set: update},
             {new: true, upsert: true, setDefaultsOnInsert: true}
         );
