@@ -33,7 +33,7 @@ const getSettings = async (req, res) => {
 
 const updateSettings = async (req, res) => {
     try {
-        const allowedFields = ['eventTitle', 'coupleNames', 'eventDate', 'eventTime', 'venueName', 'venueAddress', 'colorOfDay'];
+        const allowedFields = ['eventTitle', 'titleFontFamily', 'coupleNames', 'eventDate', 'eventTime', 'venueName', 'venueAddress', 'colorOfDay'];
         const themeFields = ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'textColor', 'qrBackgroundColor', 'qrTextColor', 'buttonColor', 'buttonTextColor'];
 
         const update = {};

@@ -10,6 +10,10 @@ const settingsSchema = new mongoose.Schema({
         type: String,
         default: 'Wedding Invitation'
     },
+    titleFontFamily: {
+        type: String,
+        default: '"Helvetica Neue", Arial, sans-serif'
+    },
     coupleNames: {
         type: String,
         default: 'Chris & Amaka'
